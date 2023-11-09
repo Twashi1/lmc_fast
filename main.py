@@ -2,15 +2,6 @@
 # mainly because I did not make a single design decision and just bodged
 # my way through to a kinda-working program
 
-# TODO: make these github issues
-# TODO: cleanup a lot of the string manipulation code
-# TODO: verify filenames entered and inputs typed
-# TODO: separate driver code when in test mode and regular running mode
-# TODO: documentation
-# TODO: more robust compiler, maybe some primitive lexer/parser? seems a bit excessive
-# TODO: print mailboxes used
-# TODO: print fetch-execute cycles run, not "instructions executed"
-
 # Should imitate some of the weirder behaviours of the LMC like:
 #   - Negative flag stays on until a new value is loaded into the calculator
 #       - this can only occur through a LDA or IN instrutcion
