@@ -12,7 +12,10 @@
 # TODO: print fetch-execute cycles run, not "instructions executed"
 
 # Should imitate some of the weirder behaviours of the LMC like:
-#   - Negative flag stays on until a new value is loaded into the LMC
+#   - Negative flag stays on until a new value is loaded into the calculator
+#       - this can only occur through a LDA or IN instrutcion
+#       - this also means the negative flag is preserved between executions
+#           of the program
 #   - Using DAT instruction to insert code, and also do RCI
 #   - Using labels as valid places to LDA from and STO to e.g.
 """
