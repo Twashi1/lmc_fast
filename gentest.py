@@ -18,11 +18,12 @@ random.seed(time.time())
 
 MAX_INSTRUCTIONS = 50_000
 TEST_CASES = 10_000
+FILENAME = "cases.txt"
 
 def mean(a, b, c):
     return (a + b + c) // 3
 
-with open("cases.txt", "w+") as f:
+with open(FILENAME, "w+") as f:
     for i in range(TEST_CASES):
         a = random.randint(0, 999)
         b = random.randint(0, 999)
