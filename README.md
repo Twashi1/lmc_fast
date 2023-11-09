@@ -10,8 +10,8 @@ Faster LMC interpreter/tester
 6. Can type enter to run the program again; this helps test that your program resets properly after halting
 
 ## Test format
-All tests should be in the following format:__
-`name;input_0;input_1;input_2;input_...;input_n;output;max_cycles`__
+All tests should be in the following format:  
+`name;input_0;input_1;input_2;input_...;input_n;output;max_cycles`  
 A name, `n` inputs, a single expected output, and the maximum number of cycles the test should run for before it's assumed the program is stuck. Multiple tests can be placed in the same file as long as they are separated by a newline
 
 ## How to generate cases
@@ -19,9 +19,9 @@ Just run `gentest.py`. You can change the `TEST_CASES` to how many test cases to
 
 ## Instruction set
 All instructions must be prefixed either with a whitespace or a `label`: a place you can
-branch to. `DAT` instructions are prefixed with an `address`: the alias for the mailbox of the `DAT` instruction__
-*Distinction between `address` and `label` in instructions is semantic only; both are 'valid' technically*__
-*Operands after the `IN`, `OUT`, `HLT` operations will be ignored*__
+branch to. `DAT` instructions are prefixed with an `address`: the alias for the mailbox of the `DAT` instruction  
+*Distinction between `address` and `label` in instructions is semantic only; both are 'valid' technically*  
+*Operands after the `IN`, `OUT`, `HLT` operations will be ignored*  
 
 - `ADD <address>` Add value at `address` to value stored in calculator
 - `SUB <address>` Subtract value at `address` from value stored in calculator. Will set the negative flag if the result underflows
