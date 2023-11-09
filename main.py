@@ -1,6 +1,5 @@
-# I made multiple very questionable design decisions when writing this code
-# mainly because I did not make a single design decision and just bodged
-# my way through to a kinda-working program
+# For checking if files entered exist
+import os
 
 # Should imitate some of the weirder behaviours of the LMC like:
 #   - Negative flag stays on until a new value is loaded into the calculator
@@ -34,71 +33,168 @@ OUT = 902 # OUT
 HLT = 000 # HLT, HALT
 DAT = -1  # DAT, DATA
 
-class Instruction:
-    def __init__(self, address, opcode, operand, line):
-        self.address = address
+# Editing this constant won't allow for your program to use more memory
+MEMORY_MAX = 100
+
+# Above N tests, it will only print tests you failed, not tests you succeeded
+TEST_LOGGING_CUTOFF = 100
+
+# TODO: test!
+def splitByWhitespace(string : str) -> list:
+    """
+    Split a string by any whitespace character
+
+    No part will be an empty string or a whitespace character itself
+    e.g.
+    "aa bb   cc  " -> ["aa", "bb", "cc"]
+    """
+    parts = []
+
+    lastNonWhitespace = -1
+
+    for i, character in enumerate(string):
+        if character.isspace():
+            if i != lastNonWhitespace and lastNonWhitespace != -1:
+                parts.append(string[lastNonWhitespace:i])
+                lastNonWhitespace = -1
+        elif lastNonWhitespace == -1:
+            lastNonWhitespace = i
+
+    if lastNonWhitespace != -1:
+        parts.append(string[lastNonWhitespace:])
+
+    return parts
+
+class Instruction(object):
+    """
+    Struct to represent an instruction
+    label: Label giving alias to the address of the instruction/data
+    opcode: Which operation to perform
+    operand: Operand/data for that operation if applicable
+    """
+    def __init__(self, label : str, opcode : int, operand : str, line : int):
+        self.label = label
         self.opcode = opcode
         self.operand = operand
         self.line = line
 
-class Test:
-    def __init__(self, name, givenInputs, expectedOutput, maxInstructions):
+class Test(object):
+    """
+    Struct to represent a test
+    name: Name of the test
+    givenInputs: Inputs to enter into the program
+    expectedOutput: Single output expected for the given inputs
+    maxCycles: Maximum amount of F-E cycles before we assume program has gotten into an infinite loop
+    """
+    def __init__(self, name : str, givenInputs : list, expectedOutput : int, maxCycles : int):
         self.name = name
         self.givenInputs = givenInputs
         self.expectedOutput = expectedOutput
-        self.maxInstructions = maxInstructions
+        self.maxCycles = maxCycles
 
-class CompilerState:
+# Combination of both semantic analysis and compiler
+# i use big fancy jargon so i must be smart :)
+class CompilerState(object):
+    """
+    Struct to hold current state of compiler
+
+    registry: Maps a label to an address in memory (mailbox)
+    memory: Memory containing opcodes and data values
+    operands: Contains operands for instructions if they have one
+    memoryIndex: First available index into memory
+    """
     def __init__(self):
-        # Mapping an address name to a memory cell
         self.registry = {}
-        # Instruction memory, and initial values for data
-        self.memory = [[0, None] for i in range(100)]
-        # Position of end of instructions
-        self.instructionCounter = 0
+        self.memory = [0,] * MEMORY_MAX
+        self.operands = [None,] * MEMORY_MAX
+        self.memoryIndex = 0
 
-# TODO: add "compile" prefix
-def getNextAvailable(compiler):
-    if compiler.instructionCounter == 100:
-        print("Ran out of space for instructions/memory, will roll over now, but expect catastrophic bugs")
-        compiler.instructionCounter = 0
+def compilerGetNextAvailable(compiler : CompilerState) -> int:
+    """
+    Get next available index in memory for an instruction/data
+    """
+    if compiler.memoryIndex == MEMORY_MAX:
+        raise RuntimeError("Ran out of space for instructions/data")
     
-    available = compiler.instructionCounter
-    compiler.instructionCounter += 1
+    available = compiler.memoryIndex
+    compiler.memoryIndex += 1
 
     return available
 
-def compileData(addressName, initialValue, compiler):
-    dataPosition = getNextAvailable(compiler)
-    compiler.registry[addressName] = dataPosition
-    compiler.memory[dataPosition][0] = initialValue
-
-def compileInstruction(instruction, compiler):
-    instructionPosition = getNextAvailable(compiler)
+def compilerAddLabelToRegistry(label : str, value : int, compiler : CompilerState) -> None:
+    # Check label is not already in compiler registry
+    if label in compiler.registry.keys():
+        raise RuntimeError(f"Label {label} had >1 data locations associated with it")
     
-    if instruction.address is not None:
-        compiler.registry[instruction.address] = instructionPosition
+    # Add label to registry
+    compiler.registry[label] = value
+
+def compilerReadDataInstruction(instruction : Instruction, compiler : CompilerState) -> None:
+    """
+    Allocate memory for a data instruction, and set initial value
+    """
+    # Get index to store data at
+    dataIndex = compilerGetNextAvailable(compiler)
+    # Add label to compiler registry
+    compilerAddLabelToRegistry(instruction.label, dataIndex, compiler)
+    # Add initial value to memory
+    compiler.memory[dataIndex] = int(instruction.operand)
+
+def compilerReadInstruction(instruction : Instruction, compiler : CompilerState) -> None:
+    """
+    Allocate memory for an instruction, and store operand if it has one
+    """
+    # If it's a data instruction, handle accordingly
+    if instruction.opcode == DAT:
+        return compilerReadDataInstruction(instruction, compiler)
+
+    instructionIndex = compilerGetNextAvailable(compiler)
     
-    compiler.memory[instructionPosition][0] = instruction.opcode
-    compiler.memory[instructionPosition][1] = instruction.operand
+    if instruction.label is not None:
+        compilerAddLabelToRegistry(instruction.label, instructionIndex, compiler)
+    
+    # Add opcode and operand to compiler
+    compiler.memory[instructionIndex] = instruction.opcode
+    compiler.operands[instructionIndex] = instruction.operand
 
-def compilationError(msg):
-    raise RuntimeError(f"[Compiler] {msg}")
+def compilerConsolidateLabels(compiler : CompilerState) -> None:
+    """
+    Lookup each label referenced in an operand, find address, and add to opcode
+    """
+    for i in range(MEMORY_MAX):
+        operand = compiler.operands[i]
 
-def compileLabels(compiler):
-    for i, [opcode, operand] in enumerate(compiler.memory):
+        # We have an operand for this instruction
         if operand is not None:
-            memoryAddress = compiler.registry.get(operand)
+            # Lookup address
+            address = compiler.registry.get(operand)
 
-            if memoryAddress is None:
-                compilationError(f"Unrecognised label: {[operand]} for opcode {[opcode]}")
+            # Label referenced doesn't exist
+            if address is None:
+                raise RuntimeError(f"Unrecognised label: '{operand}' in mailbox {i}")
             else:
-                compiler.memory[i][0] += memoryAddress
+                # TODO: is it possible to attach an operand to an instruction which doesn't take one?
+                #   does it raise an error, or does it just add and cause some weird bugs
+                #   should check since we're trying to perfectly imitate behaviour
 
-# TODO: rename to ProgramState
-class State:
+                # Add address to opcode
+                compiler.memory[i] += address
+
+class ProgramState(object):
+    """
+    Struct to hold current state of a running program
+
+    memory: Memory containing instructions and data of program
+    accumulator: Value stored in calculator
+    programCounter: Stored address of next instruction to execute
+    negativeFlag: Set when a subtraction would cause an underflow. Reset upon LDA/IN
+    haltFlag: Indicated if the program should halt
+    inputs: Stores inputs of ONLY THE LAST RUN (not preserved like LMC) (Stored in reverse order in test mode)
+    outputs: Stores outputs of ONLY THE LAST RUN (not preserved like LMC)
+    testMode: Indicates whether we should request user input (False) or read from inputs array (True)
+    """
     def __init__(self):
-        self.memory = [0,] * 100
+        self.memory = [0,] * MEMORY_MAX
         self.accumulator = 0
         self.programCounter = 0
 
@@ -110,301 +206,334 @@ class State:
 
         self.testMode = False
 
-    def set(self, value, resetFlag = False):
-        if value >= 0:
-            self.accumulator = value
-            # Only IN and LDA instructions
-            # reset the negative flag
-            self.negativeFlag = resetFlag
-        else:
-            self.accumulator = value + 1000
-            self.negativeFlag = True
+def interpreterSetAccumulator(value : int, opcode : int, state : ProgramState) -> None:
+    if value >= 0:
+        state.accumulator = value
+        # Only reset the negative flag if loading a new value, not upon addition/subtraction
+        if opcode in (LDA, IN):
+            state.negativeFlag = False
+    else:
+        # Roll-over
+        state.accumulator = value + 1000
+        state.negativeFlag = True
 
-def programOutput(state):
+def interpreterExecuteOutput(state : ProgramState) -> None:
     if not state.testMode:
         print(f"Output: {state.accumulator}")
 
     state.outputs.append(state.accumulator)
 
-def programInput(state):
+def interpreterExecuteInput(state : ProgramState) -> None:
+    value = None
+
     if not state.testMode:
-        # TODO: Check for valid input
-        state.set(int(input("Input: ")), True)
-    
+        userInput = input("Input: ")
+
+        while not (userInput.isdigit() and len(userInput) <= 3):
+            print("Invalid input!")
+            userInput = input("Input: ")
+
+        value = int(userInput)
+
     else:
-        state.accumulator = state.inputs[-1]
+        if len(state.inputs) == 0:
+            raise RuntimeError("Ran out of inputs to use for a test!")
+
+        # Get last input in state inputs list
+        value = state.inputs[-1]
+        # Pop last input
         state.inputs.pop()
 
-def programAdd(address, state):
-    state.set((state.accumulator + state.memory[address]) % 1_000)
+    interpreterSetAccumulator(value, IN, state)
 
-def programSubtract(address, state):
-    state.set(state.accumulator - state.memory[address])
+def interpreterExecuteAdd(address : int, state : ProgramState) -> None:
+    interpreterSetAccumulator((state.accumulator + state.memory[address]) % 1_000, ADD, state)
 
-def programStore(address, state):
+def interpreterExecuteSubtract(address : int, state : ProgramState) -> None:
+    interpreterSetAccumulator(state.accumulator - state.memory[address], SUB, state)
+
+def interpreterExecuteStore(address : int, state : ProgramState) -> None:
     state.memory[address] = state.accumulator
 
-def programLoad(address, state):
-    state.set(state.memory[address], True)
+def interpreterExecuteLoad(address : int, state : ProgramState) -> None:
+    interpreterSetAccumulator(state.memory[address], LDA, state)
 
-def programHalt(state):
+def interpreterExecuteHalt(state : ProgramState) -> None:
     state.haltFlag = True
 
-def programBranch(address, state):
+def interpreterExecuteBranch(address : int, state : ProgramState) -> None:
     state.programCounter = address
 
-def programJumpIfZero(address, state):
+def interpreterExecuteBranchZero(address : int, state : ProgramState) -> None:
     if state.accumulator == 0:
         state.programCounter = address
 
-def programJumpIfPositive(address, state):
-    # Lie
+def interpreterExecuteBranchPositive(address : int, state : ProgramState) -> None:
     if not state.negativeFlag:
         state.programCounter = address
 
-def programAdvance(state):
+INTERPRETER_JUMP_TABLE = [
+    None,                               # 0 (HALT)
+    interpreterExecuteAdd,              # 1 ADD
+    interpreterExecuteSubtract,         # 2 SUB
+    interpreterExecuteStore,            # 3 STO
+    None,                               # 4 (NONE)
+    interpreterExecuteLoad,             # 5 LDA
+    interpreterExecuteBranch,           # 6 BR
+    interpreterExecuteBranchZero,       # 7 BRZ
+    interpreterExecuteBranchPositive,   # 8 BRP
+    None                                # 9 (IN, OUT)
+]
+
+def interpreterAdvance(state : ProgramState) -> None:
     # Get current instruction
     instruction = state.memory[state.programCounter]
+
+    # Increment program counter
     state.programCounter += 1
 
-    # Get opcode of instruction
-    opcode = instruction // 100 * 100
-    operand = instruction - opcode
+    # Get opcode and operand of instruction
+    opcode = instruction // 100
+    operand = instruction - opcode * 100
 
-    if opcode == 900:
-        if instruction == OUT:
-            programOutput(state)
-        elif instruction == IN:
-            programInput(state)
-    elif opcode == ADD:
-        programAdd(operand, state)
-    elif opcode == SUB:
-        programSubtract(operand, state)
-    elif opcode == STO:
-        programStore(operand, state)
-    elif opcode == LDA:
-        programLoad(operand, state)
+    if instruction == OUT:
+        interpreterExecuteOutput(state)
+    elif instruction == IN:
+        interpreterExecuteInput(state)
     elif instruction == HLT:
-        programHalt(state)
-    elif opcode == BR:
-        programBranch(operand, state)
-    elif opcode == BRZ:
-        programJumpIfZero(operand, state)
-    elif opcode == BRP:
-        programJumpIfPositive(operand, state)
+        interpreterExecuteHalt(state)
+    else:
+        INTERPRETER_JUMP_TABLE[opcode](operand, state)
 
-# Why did past-Thomas decide that the only thing he would abbreviate is the 
-# word "abbreviation" itself?
-def getOpcode(abrv):
-    if abrv in ("HLT", "HALT"):
+def interpreterLoadCompiler(program : ProgramState, compiler : CompilerState) -> None:
+    # Load memory
+    for i in range(MEMORY_MAX):
+        program.memory[i] = compiler.memory[i]
+
+def parserGetOpcode(operationName : str) -> int:
+    if operationName in ("HLT", "HALT"):
         return HLT
-    elif abrv == "ADD":
+    elif operationName == "ADD":
         return ADD
-    elif abrv in ("STO", "STORE"):
+    elif operationName in ("STO", "STORE"):
         return STO
-    elif abrv in ("SUB", "SUBTRACT"):
+    elif operationName in ("SUB", "SUBTRACT"):
         return SUB
-    elif abrv in ("LDA", "LOAD"):
+    elif operationName in ("LDA", "LOAD"):
         return LDA
-    elif abrv == "OUT":
+    elif operationName == "OUT":
         return OUT
-    elif abrv == "IN":
+    elif operationName == "IN":
         return IN
-    elif abrv == "BR":
+    elif operationName == "BR":
         return BR
-    elif abrv == "BRZ":
+    elif operationName == "BRZ":
         return BRZ
-    elif abrv == "BRP":
+    elif operationName == "BRP":
         return BRP
-    elif abrv in ("DAT", "DATA"):
+    elif operationName in ("DAT", "DATA"):
         return DAT
 
-    # TODO: Handling invalid opcode
+    raise RuntimeError(f"Unrecognised operation: {operationName}")
 
-# TODO: not a method that acts upon programState, yet given program prefix...
-def programLoadCompiler(compiler):
-    state = State()
-    
-    # Load memory
-    for i, [instruction, _] in enumerate(compiler.memory):
-        state.memory[i] = instruction
-
-    return state
-
-def readInstruction(instruction, line):
-    address = None
+def parserReadInstruction(instruction : str, line : int) -> Instruction:
+    label = None
     operation = None
     operand = None
-    
-    # TODO: more robust scheme for dealing with whitespace, this is horrific
-    # Indicates no address
+
+    # Get all non whitespace parts of the instruction split by space
+    parts = splitByWhitespace(instruction)
+
+    # Case where a line is just whitespace or empty string
+    if len(parts) == 0:
+        return None
+
+    # Check for some whitespace at start of instruction
+    # This indicates an instruction without a label
     if instruction[0].isspace():
-        parts = instruction.split(" ")
-
-        parts = [part for part in parts if part != "" and not part.isspace()]
-
-        if len(parts) == 0:
-            return None
-
+        # Operation is thus the 1st part since there's no label
         operation = parts[0]
 
         if len(parts) > 1:
             operand = parts[1]
 
+    # Indicates instruction starts with a label
     else:
-        parts = instruction.split(" ")
-        parts = [part for part in parts if part != "" and not part.isspace()]
-        
-        if len(parts) == 0:
-            return None
-
-        address = parts[0]
+        label = parts[0]
         operation = parts[1]
 
+        # If there is an operand, include it as well
         if len(parts) > 2:
             operand = parts[2]
 
-    return Instruction(address, getOpcode(operation.replace("\t", "")), operand, line)
+    opcode = parserGetOpcode(operation)
 
-def compile(text):
-    instructions = []
-    dataInstructions = []
+    # Ensure operand is a digit
+    if opcode == DAT and not (operand is not None and operand.isdigit() and len(operand) <= 3):
+        raise RuntimeError(f"Data instruction must have 3 or fewer digit integer operand, but got {operand}")
+    # TODO: Ensure operand is valid identifier, if LMC enforces it
+    else:
+        pass
 
-    compilerState = CompilerState()
+    return Instruction(label, opcode, operand, line)
 
-    for i, line in enumerate(text):
-        cleaned = line.replace("\n", "")
+def compilerCompileLines(lines : list, compiler : CompilerState) -> None:
+    for i, line in enumerate(lines):
+        # Replace \n at the end of line
+        if line[:-1] == "\n":
+            line = line[:-1]
+
+        # Replace any comments
         commentIndex = line.find("#")
 
+        # If a comment was found
         if commentIndex != -1:
-            cleaned = cleaned[0:commentIndex]
+            # Remove the commented part of text
+            line = line[:commentIndex]
 
-        if cleaned != "":
-            newInstruction = readInstruction(cleaned, i)
+        # If line is not now empty
+        if line != "":
+            newInstruction = parserReadInstruction(line, i)
 
+            # Will return None for some inputs
             if newInstruction != None:
-                if newInstruction.opcode == DAT:
-                    compileData(newInstruction.address, int(newInstruction.operand), compilerState)
+                compilerReadInstruction(newInstruction, compiler)
 
-                else:
-                    compileInstruction(newInstruction, compilerState)
+    compilerConsolidateLabels(compiler)
 
-    compileLabels(compilerState)
+def runProgram(state : ProgramState, maxCycles = 1_000_000) -> int:
+    """
+    Executes program to completion, returning number of F-E cycles
+    """
+    FECycles = 0
 
-    return compilerState            
+    #  and FECycles <= maxCycles
+    while not state.haltFlag:
+        interpreterAdvance(state)
+        # TODO: BAD! FECycles != instructions executed AFAIK!
+        FECycles += 1
 
-filename = input("Enter source code file: ")
-# Expected format for a test is:
-# name;input;input;input;output;max_instructions
-# As many inputs as the program asks for, with one single output, and max_instructions
-# being how many instructions should be run before we assume you got stuck in an
-# infinite loop
-# Example (for the mean of 3 numbers):
-# zero-test:0;1;0;0;50000
-# big-test:999;333;666;666;50000
-# ...
-# Multiple tests can be in the same file, just separated by a newline
-testSuite = input("Enter filename for tests to run, or leave blank to run no tests: ")
+    return FECycles
 
-# Declare compilerState variable
-compilerState = None
+def softResetProgram(state : ProgramState) -> None:
+    """
+    Performs soft reset on halt flag, inputs, outputs so program can be run again
+    Does NOT reload initial values of data, this is something you have to do yourself
+    """
+    state.haltFlag = False
+    # Behaviour here varies slightly, in LMC, these inputs and outputs would remain visible,
+    # but to simplify testing, I'm clearing them on each run
+    state.inputs = []
+    state.outputs = []
 
-# Compile given source code
-# TODO: check filename is real file
-with open(filename, "r") as f:
-    compilerState = compile(f.readlines())
+def runTestMode(tests : list, state : ProgramState) -> None:
+    disableLogging = len(tests) > TEST_LOGGING_CUTOFF
 
-# Load compiled source code into program
-programState = programLoadCompiler(compilerState)
-
-tests = []
-
-if testSuite != "":
-    # TODO: check filename is real file
-    with open(testSuite, "r") as f:
-        lines = f.readlines()
-
-        for line in lines:
-            cleaned = line.replace("\n", "")
-            parts = cleaned.split(";")
-
-            if cleaned[0] == "#":
-                continue
-
-            if cleaned == "":
-                continue
-
-            if len(parts) < 4:
-                print("Too few parts in a test declaration, expecting at least 4")
-
-            tests.append(Test(parts[0], [int(part) for part in parts[1:-2]], int(parts[-2]), int(parts[-1])))
-
-# TODO: bad bad bad
-first = True
-
-# TODO: kinda bad
-disableLogging = len(tests) > 100
-
-# TODO: horrible mess of logic because trying to run same code when running tests or when running regularly
-while input("Type 'exit' to exit program, type anything else to run program: ").lower() != 'exit':
-    testIndex = -1
-    currentTest = None
     testResults = []
 
-    if len(tests) > 0:
-        programState.testMode = True
-        testIndex = 0
+    state.testMode = True
 
-    while testIndex < len(tests):
-        currentTest = None if not programState.testMode else tests[testIndex]
-        instructionsExecuted = 0
+    for testIndex, currentTest in enumerate(tests):
+        # Reverse given inputs since State::inputs behaves a bit like a stack                
+        state.inputs = [currentTest.givenInputs[i] for i in range(len(currentTest.givenInputs) - 1, -1, -1)]
+        if not disableLogging:
+            print(f"Running test {currentTest.name} with inputs: {currentTest.givenInputs}, expecting {currentTest.expectedOutput}")
 
-        if programState.testMode:
-            # Reverse given inputs since State::inputs behaves a bit like a stack
-            programState.inputs = [currentTest.givenInputs[i] for i in range(len(currentTest.givenInputs) - 1, -1, -1)]
+        cycles = runProgram(state)
+
+        testSucceeded = len(state.outputs) == 1 and state.outputs[0] == tests[testIndex].expectedOutput
+        testResults.append(testSucceeded)
+
+        if testSucceeded:
             if not disableLogging:
-                print(f"Running test {currentTest.name} with inputs: {currentTest.givenInputs}, expecting {currentTest.expectedOutput}")
-
-        # TODO: should set regular maximum instruction count
-        while not (programState.haltFlag or (programState.testMode and instructionsExecuted > currentTest.maxInstructions)):
-            programAdvance(programState)
-            instructionsExecuted += 1
-
-        if not programState.testMode:
-            print(f"Program ended, {instructionsExecuted} instructions executed")
+                print(f"Test {testIndex + 1}: '{currentTest.name}' passed in {cycles} F-E cycles")
         else:
-            testSucceeded = len(programState.outputs) == 1 and programState.outputs[0] == tests[testIndex].expectedOutput
-            testResults.append(testSucceeded)
+            reason = None
 
-            if testSucceeded:
-                if not disableLogging:
-                    print(f"Test {testIndex + 1}: '{currentTest.name} passed in {instructionsExecuted} instructions")
+            if cycles > currentTest.maxCycles:
+                reason = f"Exceeded maximum instructions {currentTest.maxInstructions}"
+
             else:
-                reason = None
+                output = None if len(state.outputs) < 1 else state.outputs
+                reason = f"For input {currentTest.givenInputs} expected {currentTest.expectedOutput}, but got {output} instead"
 
-                if instructionsExecuted > currentTest.maxInstructions:
-                    reason = f"Exceeded maximum instructions {currentTest.maxInstructions}"
+            print(f"Test {testIndex + 1}: '{currentTest.name}' failed -> {reason}")
 
-                else:
-                    output = None if len(programState.outputs) < 1 else programState.outputs
-                    reason = f"For input {[currentTest.givenInputs]} expected {currentTest.expectedOutput}, but got {output} instead"
+        softResetProgram(state)
 
-                print(f"Test {testIndex + 1}: '{currentTest.name}' failed -> {reason}")
+    print(f"{sum(testResults)}/{len(tests)} passed")
 
-        # Soft-reset of program state
-        programState.haltFlag = False
-        # Behaviour here varies slightly, in LMC, these inputs and outputs would remain visible,
-        # but to simplify testing, I'm clearing them on each run
-        programState.inputs = []
-        programState.outputs = []
+def runUserMode(state : ProgramState) -> None:
+    cycles = runProgram(state)
+    softResetProgram(state)
 
-        instructionsExecuted = 0
-        testIndex += 1
+    print(f"Program ended in {cycles} F-E cycles")
 
-    # Print summary of test results
-    if programState.testMode:
-        print(f"{sum(testResults)}/{len(tests)} passed")
-    
-    first = False
+# Entrypoint/driver code
+if __name__ == "__main__":
+    sourceFilename = input("Enter source code file: ")
+
+    while not os.path.exists(sourceFilename):
+        print(f"Couldn't find file {sourceFilename}?")
+        sourceFilename = input("Enter source code file: ")
+
+    # Expected format for a test is:
+    # name;input;input;input;output;maxCycles
+    # As many inputs as the program asks for, with one single output, and maxCycles
+    # being how many F-E cycles should be run before we assume you got stuck in an
+    # infinite loop
+    # Example (for the mean of 3 numbers):
+    # zero-test:0;1;0;0;50000
+    # big-test:999;333;666;666;50000
+    # ...
+    # Multiple tests can be in the same file, just separated by a newline
+    testFilename = input("Enter filename for tests to run, or leave blank to run no tests: ")
+
+    while not (os.path.exists(testFilename) or testFilename == ""):
+        print(f"Couldn't find file {testFilename}?")
+        testFilename = input("Enter filename for tests to run, or leave blank to run no tests: ")
+
+    # Declare compiler state variable
+    compilerState = CompilerState()
+
+    # Compile sourcecode
+    with open(sourceFilename, "r") as f:
+        compilerCompileLines(f.readlines(), compilerState)
+
+    print("Finished compilation successfully")
+
+    # Declare program state variable
+    programState = ProgramState()
+
+    # Load compiled program into state
+    interpreterLoadCompiler(programState, compilerState)
+
+    # Read in tests if we have any
+    tests = []
+
+    if testFilename != "":
+        with open(testFilename, "r") as f:
+            lines = f.readlines()
+
+            for i, line in enumerate(lines):
+                # Remove newline
+                line = line[:-1]
+                # If line starts with a comment, is whitespace or empty
+                if line[0] == "#" or line.isspace() or line == "":
+                    continue
+
+                parts = line.split(";")
+
+                if len(parts) < 4:
+                    raise RuntimeError(f"Too few arguments in test definition on line {i}, expected at least 4")
+
+                # This line is a warcrime
+                tests.append(Test(parts[0], [int(part) for part in parts[1:-2]], int(parts[-2]), int(parts[-1])))
+
+    while input("Type 'exit' to exit program, type anything else to run program: ").lower() != 'exit':
+        if len(tests) > 0:
+            runTestMode(tests, programState)
+        else:
+            runUserMode(programState)
 
 print("Goodbye")
