@@ -39,7 +39,6 @@ MEMORY_MAX = 100
 # Above N tests, it will only print tests you failed, not tests you succeeded
 TEST_LOGGING_CUTOFF = 100
 
-# TODO: test!
 def splitByWhitespace(string : str) -> list:
     """
     Split a string by any whitespace character
@@ -68,6 +67,7 @@ def splitByWhitespace(string : str) -> list:
 class Instruction(object):
     """
     Struct to represent an instruction
+
     label: Label giving alias to the address of the instruction/data
     opcode: Which operation to perform
     operand: Operand/data for that operation if applicable
@@ -81,6 +81,7 @@ class Instruction(object):
 class Test(object):
     """
     Struct to represent a test
+
     name: Name of the test
     givenInputs: Inputs to enter into the program
     expectedOutput: Single output expected for the given inputs
@@ -122,6 +123,12 @@ def compilerGetNextAvailable(compiler : CompilerState) -> int:
     return available
 
 def compilerAddLabelToRegistry(label : str, value : int, compiler : CompilerState) -> None:
+    """
+    Add label to compiler's registry, so it can be looked up later
+
+    Checks for duplicates
+    """
+
     # Check label is not already in compiler registry
     if label in compiler.registry.keys():
         raise RuntimeError(f"Label {label} had >1 data locations associated with it")
@@ -207,6 +214,9 @@ class ProgramState(object):
         self.testMode = False
 
 def interpreterSetAccumulator(value : int, opcode : int, state : ProgramState) -> None:
+    """
+    Set the value of the accumulator in the program state
+    """
     if value >= 0:
         state.accumulator = value
         # Only reset the negative flag if loading a new value, not upon addition/subtraction
@@ -218,17 +228,26 @@ def interpreterSetAccumulator(value : int, opcode : int, state : ProgramState) -
         state.negativeFlag = True
 
 def interpreterExecuteOutput(state : ProgramState) -> None:
+    """
+    Execute an output instruction
+    """
     if not state.testMode:
         print(f"Output: {state.accumulator}")
 
     state.outputs.append(state.accumulator)
 
 def interpreterExecuteInput(state : ProgramState) -> None:
+    """
+    Execute an input instruction
+
+    If in testing mode, grab it from the state's input stack, otherwise request input from the user
+    """
     value = None
 
     if not state.testMode:
         userInput = input("Input: ")
 
+        # Validate input
         while not (userInput.isdigit() and len(userInput) <= 3):
             print("Invalid input!")
             userInput = input("Input: ")
@@ -247,31 +266,58 @@ def interpreterExecuteInput(state : ProgramState) -> None:
     interpreterSetAccumulator(value, IN, state)
 
 def interpreterExecuteAdd(address : int, state : ProgramState) -> None:
+    """
+    Perform ADD instruction
+    """
     interpreterSetAccumulator((state.accumulator + state.memory[address]) % 1_000, ADD, state)
 
 def interpreterExecuteSubtract(address : int, state : ProgramState) -> None:
+    """
+    Perform SUB instruction
+    """
     interpreterSetAccumulator(state.accumulator - state.memory[address], SUB, state)
 
 def interpreterExecuteStore(address : int, state : ProgramState) -> None:
+    """
+    Perform STO instruction
+    """
     state.memory[address] = state.accumulator
 
 def interpreterExecuteLoad(address : int, state : ProgramState) -> None:
+    """
+    Perform LDA instruction
+    """
     interpreterSetAccumulator(state.memory[address], LDA, state)
 
 def interpreterExecuteHalt(state : ProgramState) -> None:
+    """
+    Perform HLT instruction
+    """
     state.haltFlag = True
 
 def interpreterExecuteBranch(address : int, state : ProgramState) -> None:
+    """
+    Perform BR instruction (unconditional jump)
+    """
     state.programCounter = address
 
 def interpreterExecuteBranchZero(address : int, state : ProgramState) -> None:
+    """
+    Perform BRZ instruction (JIZ)
+    """
     if state.accumulator == 0:
         state.programCounter = address
 
 def interpreterExecuteBranchPositive(address : int, state : ProgramState) -> None:
+    """
+    Perform BRP instruction (jumps if the negative flag is not set)
+    """
     if not state.negativeFlag:
         state.programCounter = address
 
+# A jump table, index with the first digit of the opcode to get the relevant command to run
+# IN/OUT commands are excluded since they cannot be identified by the first digit of the opcode alone
+# HLT command is excluded because it takes one argument, not two
 INTERPRETER_JUMP_TABLE = [
     None,                               # 0 (HALT)
     interpreterExecuteAdd,              # 1 ADD
@@ -286,6 +332,9 @@ INTERPRETER_JUMP_TABLE = [
 ]
 
 def interpreterAdvance(state : ProgramState) -> None:
+    """
+    Grab next instruction, increment program counter, and execute the instruction
+    """
     # Get current instruction
     instruction = state.memory[state.programCounter]
 
@@ -306,11 +355,17 @@ def interpreterAdvance(state : ProgramState) -> None:
         INTERPRETER_JUMP_TABLE[opcode](operand, state)
 
 def interpreterLoadCompiler(program : ProgramState, compiler : CompilerState) -> None:
+    """
+    Load memory from compiler into program state
+    """
     # Load memory
     for i in range(MEMORY_MAX):
         program.memory[i] = compiler.memory[i]
 
 def parserGetOpcode(operationName : str) -> int:
+    """
+    Get the opcode from the name of the operation/any alias
+    """
     if operationName in ("HLT", "HALT"):
         return HLT
     elif operationName == "ADD":
@@ -337,6 +392,9 @@ def parserGetOpcode(operationName : str) -> int:
     raise RuntimeError(f"Unrecognised operation: {operationName}")
 
 def parserReadInstruction(instruction : str, line : int) -> Instruction:
+    """
+    Read a line of code and convert it to an instruction, or return None if it's not a line of code
+    """
     label = None
     operation = None
     operand = None
@@ -378,6 +436,9 @@ def parserReadInstruction(instruction : str, line : int) -> Instruction:
     return Instruction(label, opcode, operand, line)
 
 def compilerCompileLines(lines : list, compiler : CompilerState) -> None:
+    """
+    Compile a list of lines of code
+    """
     for i, line in enumerate(lines):
         # Replace \n at the end of line
         if line[:-1] == "\n":
@@ -427,6 +488,9 @@ def softResetProgram(state : ProgramState) -> None:
     state.outputs = []
 
 def runTestMode(tests : list, state : ProgramState) -> None:
+    """
+    Runs your program in testing mode
+    """
     disableLogging = len(tests) > TEST_LOGGING_CUTOFF
 
     passedTestCounter = 0
@@ -468,6 +532,9 @@ def runTestMode(tests : list, state : ProgramState) -> None:
     print(f"{passedTestCounter}/{len(tests)} passed")
 
 def runUserMode(state : ProgramState) -> None:
+    """
+    Runs your program in user input mode
+    """
     cycles = runProgram(state)
     softResetProgram(state)
 
