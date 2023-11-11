@@ -500,7 +500,7 @@ if __name__ == "__main__":
     with open(sourceFilename, "r") as f:
         compilerCompileLines(f.readlines(), compilerState)
 
-    print("Finished compilation successfully")
+    print(f"Finished compilation successfully, using {compilerState.memoryIndex} mailboxes")
 
     # Declare program state variable
     programState = ProgramState()
