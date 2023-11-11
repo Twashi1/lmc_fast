@@ -429,9 +429,11 @@ def softResetProgram(state : ProgramState) -> None:
 def runTestMode(tests : list, state : ProgramState) -> None:
     disableLogging = len(tests) > TEST_LOGGING_CUTOFF
 
-    testResults = []
+    passedTestCounter = 0
 
     state.testMode = True
+
+    print(f"About to run {len(tests)} tests")
 
     for testIndex, currentTest in enumerate(tests):
         # Reverse given inputs since State::inputs behaves a bit like a stack                
@@ -442,7 +444,9 @@ def runTestMode(tests : list, state : ProgramState) -> None:
         cycles = runProgram(state)
 
         testSucceeded = len(state.outputs) == 1 and state.outputs[0] == tests[testIndex].expectedOutput
-        testResults.append(testSucceeded)
+        
+        if testSucceeded:
+            passedTestCounter += 1
 
         if testSucceeded:
             if not disableLogging:
@@ -461,7 +465,7 @@ def runTestMode(tests : list, state : ProgramState) -> None:
 
         softResetProgram(state)
 
-    print(f"{sum(testResults)}/{len(tests)} passed")
+    print(f"{passedTestCounter}/{len(tests)} passed")
 
 def runUserMode(state : ProgramState) -> None:
     cycles = runProgram(state)
