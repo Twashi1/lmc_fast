@@ -39,6 +39,10 @@ MEMORY_MAX = 100
 # Above N tests, it will only print tests you failed, not tests you succeeded
 TEST_LOGGING_CUTOFF = 100
 
+# When running large number of tests, will print progress update every hundred
+TEST_LARGE_NUMBER = 1_000
+TEST_LOG_FREQUENCY = 100
+
 def splitByWhitespace(string : str) -> list:
     """
     Split a string by any whitespace character
@@ -349,7 +353,9 @@ def interpreterAdvance(state : ProgramState) -> None:
         interpreterExecuteOutput(state)
     elif instruction == IN:
         interpreterExecuteInput(state)
-    elif instruction == HLT:
+    # Note that we use opcode * 100, not "instruction"
+    # since HLT (erroneously I guess? Only checks the first digit)
+    elif opcode * 100 == HLT:
         interpreterExecuteHalt(state)
     else:
         INTERPRETER_JUMP_TABLE[opcode](operand, state)
@@ -491,7 +497,9 @@ def runTestMode(tests : list, state : ProgramState) -> None:
     """
     Runs your program in testing mode
     """
-    disableLogging = len(tests) > TEST_LOGGING_CUTOFF
+    disableLogging = len(tests) >= TEST_LOGGING_CUTOFF
+
+    doProgressUpdates = len(tests) >= TEST_LARGE_NUMBER
 
     passedTestCounter = 0
 
@@ -509,10 +517,12 @@ def runTestMode(tests : list, state : ProgramState) -> None:
 
         testSucceeded = len(state.outputs) == 1 and state.outputs[0] == tests[testIndex].expectedOutput
         
+        if testIndex % TEST_LOG_FREQUENCY == 0:
+            print(f"Completed {testIndex} tests")
+
         if testSucceeded:
             passedTestCounter += 1
 
-        if testSucceeded:
             if not disableLogging:
                 print(f"Test {testIndex + 1}: '{currentTest.name}' passed in {cycles} F-E cycles")
         else:
