@@ -293,7 +293,7 @@ def interpreterExecuteLoad(address : int, state : ProgramState) -> None:
     """
     interpreterSetAccumulator(state.memory[address], LDA, state)
 
-def interpreterExecuteHalt(state : ProgramState) -> None:
+def interpreterExecuteHalt(_, state : ProgramState) -> None:
     """
     Perform HLT instruction
     """
@@ -319,20 +319,26 @@ def interpreterExecuteBranchPositive(address : int, state : ProgramState) -> Non
     if not state.negativeFlag:
         state.programCounter = address
 
+def interpreterNoOp(_0, _1) -> None:
+    """
+    Any instruction with opcode 4, or opcode 9 with invalid address is just ignored and skipped by LMC, copying this behaviour
+    """
+    pass
+
 # A jump table, index with the first digit of the opcode to get the relevant command to run
 # IN/OUT commands are excluded since they cannot be identified by the first digit of the opcode alone
-# HLT command is excluded because it takes one argument, not two
+# Any instruction with opcode 4, or opcode 9 with invalid address just skip to the next instruction
 INTERPRETER_JUMP_TABLE = [
-    None,                               # 0 (HALT)
+    interpreterExecuteHalt,             # 0 HALT
     interpreterExecuteAdd,              # 1 ADD
     interpreterExecuteSubtract,         # 2 SUB
     interpreterExecuteStore,            # 3 STO
-    None,                               # 4 (NONE)
+    interpreterNoOp,                    # 4 NONE
     interpreterExecuteLoad,             # 5 LDA
     interpreterExecuteBranch,           # 6 BR
     interpreterExecuteBranchZero,       # 7 BRZ
     interpreterExecuteBranchPositive,   # 8 BRP
-    None                                # 9 (IN, OUT)
+    interpreterNoOp                     # 9 (IN, OUT)
 ]
 
 def interpreterAdvance(state : ProgramState) -> None:
@@ -353,10 +359,6 @@ def interpreterAdvance(state : ProgramState) -> None:
         interpreterExecuteOutput(state)
     elif instruction == IN:
         interpreterExecuteInput(state)
-    # Note that we use opcode * 100, not "instruction"
-    # since HLT (erroneously I guess? Only checks the first digit)
-    elif opcode * 100 == HLT:
-        interpreterExecuteHalt(state)
     else:
         INTERPRETER_JUMP_TABLE[opcode](operand, state)
 
