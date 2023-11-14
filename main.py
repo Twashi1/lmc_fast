@@ -1,6 +1,12 @@
 # For checking if files entered exist
 import os
 
+# TODO: email magnus about how the program will be tested
+# there is a strange behaviour in batch process mode where it seems that
+# after the HLT command, it jumps to address 0 for you
+# (which ended up causing a bug for me since i assumed that wasn't the case)
+batchProccessMode = True
+
 # Should imitate some of the weirder behaviours of the LMC like:
 #   - Negative flag stays on until a new value is loaded into the calculator
 #       - this can only occur through a LDA or IN instrutcion
@@ -479,7 +485,6 @@ def runProgram(state : ProgramState, maxCycles = 1_000_000) -> int:
     #  and FECycles <= maxCycles
     while not state.haltFlag:
         interpreterAdvance(state)
-        # TODO: BAD! FECycles != instructions executed AFAIK!
         FECycles += 1
 
     return FECycles
@@ -494,6 +499,10 @@ def softResetProgram(state : ProgramState) -> None:
     # but to simplify testing, I'm clearing them on each run
     state.inputs = []
     state.outputs = []
+
+    # If in batch process mode, we reset to address 0
+    if batchProccessMode:
+        state.programCounter = 0
 
 def runTestMode(tests : list, state : ProgramState) -> None:
     """
