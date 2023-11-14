@@ -1,11 +1,9 @@
 # For checking if files entered exist
 import os
 
-# TODO: email magnus about how the program will be tested
-# there is a strange behaviour in batch process mode where it seems that
-# after the HLT command, it jumps to address 0 for you
-# (which ended up causing a bug for me since i assumed that wasn't the case)
-batchProccessMode = True
+# Test if the following behaviours are the same in batch process mode as regular user mode:
+# 1. Automatically reset program counter after HLT instruction
+# 2. Accumulator value is NOT reset, just preserved from last run
 
 # Should imitate some of the weirder behaviours of the LMC like:
 #   - Negative flag stays on until a new value is loaded into the calculator
@@ -500,18 +498,7 @@ def softResetProgram(state : ProgramState) -> None:
     state.inputs = []
     state.outputs = []
 
-    # If in batch process mode, we reset to address 0
-    if batchProccessMode:
-        state.programCounter = 0
-
-def hardResetProgram(state : ProgramState, compiler : CompilerState) -> None:
-    """
-    Performs a hard reset on the program, resetting everything to initial values
-    """
-    softResetProgram(state)
     state.programCounter = 0
-
-    interpreterLoadCompiler(state, compiler)
 
 def runTestMode(tests : list, state : ProgramState) -> None:
     """
@@ -557,8 +544,7 @@ def runTestMode(tests : list, state : ProgramState) -> None:
 
             print(f"Test {testIndex + 1}: '{currentTest.name}' failed -> {reason}")
 
-        # TODO: bad
-        hardResetProgram(state, compilerState)
+        softResetProgram(state)
 
     print(f"{passedTestCounter}/{len(tests)} passed")
 
@@ -567,8 +553,7 @@ def runUserMode(state : ProgramState) -> None:
     Runs your program in user input mode
     """
     cycles = runProgram(state)
-    # TODO: bad
-    hardResetProgram(state, compilerState)
+    softResetProgram(state)
 
     print(f"Program ended in {cycles} F-E cycles")
 
