@@ -528,7 +528,7 @@ def runTestMode(tests : list, state : ProgramState) -> None:
 
         testSucceeded = len(state.outputs) == 1 and state.outputs[0] == tests[testIndex].expectedOutput
         
-        if testIndex % TEST_LOG_FREQUENCY == 0:
+        if doProgressUpdates and (testIndex % TEST_LOG_FREQUENCY == 0):
             print(f"Completed {testIndex} tests")
 
         if testSucceeded:
