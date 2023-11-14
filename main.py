@@ -504,6 +504,15 @@ def softResetProgram(state : ProgramState) -> None:
     if batchProccessMode:
         state.programCounter = 0
 
+def hardResetProgram(state : ProgramState, compiler : CompilerState) -> None:
+    """
+    Performs a hard reset on the program, resetting everything to initial values
+    """
+    softResetProgram(state)
+    state.programCounter = 0
+
+    interpreterLoadCompiler(state, compiler)
+
 def runTestMode(tests : list, state : ProgramState) -> None:
     """
     Runs your program in testing mode
@@ -548,7 +557,8 @@ def runTestMode(tests : list, state : ProgramState) -> None:
 
             print(f"Test {testIndex + 1}: '{currentTest.name}' failed -> {reason}")
 
-        softResetProgram(state)
+        # TODO: bad
+        hardResetProgram(state, compilerState)
 
     print(f"{passedTestCounter}/{len(tests)} passed")
 
@@ -557,7 +567,8 @@ def runUserMode(state : ProgramState) -> None:
     Runs your program in user input mode
     """
     cycles = runProgram(state)
-    softResetProgram(state)
+    # TODO: bad
+    hardResetProgram(state, compilerState)
 
     print(f"Program ended in {cycles} F-E cycles")
 

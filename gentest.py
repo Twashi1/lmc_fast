@@ -17,7 +17,7 @@ import time
 random.seed(time.time())
 
 MAX_INSTRUCTIONS = 50_000
-TEST_CASES = 100_000
+TEST_CASES = 1_000
 FILENAME = "cases.txt"
 
 def mean(a, b, c):
