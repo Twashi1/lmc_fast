@@ -23,9 +23,19 @@ FILENAME = "cases.txt"
 def mean(a, b, c):
     return (a + b + c) // 3
 
+def case(name, a, b, c):
+    return f"{name};{a},{b},{c};{mean(a, b, c)};{MAX_INSTRUCTIONS}\n"
+
+specials = [(999,999,999), (0,0,0), (1,999,0)]
+
+# name;a,b,c;out;maxCycles
+
 with open(FILENAME, "w+") as f:
     for i in range(TEST_CASES):
         a = random.randint(0, 999)
         b = random.randint(0, 999)
         c = random.randint(0, 999)
-        f.write(f"{i};{a},{b},{c};{mean(a, b, c)};{MAX_INSTRUCTIONS}\n")
+        f.write(case(i, a, b, c))
+
+    for special in specials:
+        f.write(case("special", special[0], special[1], special[2]))
