@@ -439,11 +439,15 @@ def parserReadInstruction(instruction : str, line : int) -> Instruction:
     opcode = parserGetOpcode(operation)
 
     # Ensure operand is a digit
-    if opcode == DAT and not (operand is not None and operand.isdigit() and len(operand) <= 3):
+    if opcode == DAT and not ((operand.isdigit() and len(operand) <= 3) or (operand is None)):
         raise RuntimeError(f"Data instruction must have 3 or fewer digit integer operand, but got {operand}")
     # TODO: Ensure operand is valid identifier, if LMC enforces it
     else:
         pass
+
+    # Pretty shitty fix
+    if opcode == DAT and operand is None:
+        operand = 0
 
     return Instruction(label, opcode, operand, line)
 
