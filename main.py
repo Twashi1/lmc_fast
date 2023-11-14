@@ -610,13 +610,10 @@ if __name__ == "__main__":
                 if line[0] == "#" or line.isspace() or line == "":
                     continue
 
-                parts = line.split(";")
-
-                if len(parts) < 4:
-                    raise RuntimeError(f"Too few arguments in test definition on line {i}, expected at least 4")
+                name, inputs, output, feMax = line.split(";")
 
                 # This line is a warcrime
-                tests.append(Test(parts[0], [int(part) for part in parts[1:-2]], int(parts[-2]), int(parts[-1])))
+                tests.append(Test(name, [int(i) for i in inputs.split(",")], int(output), int(feMax)))
 
     while input("Type 'exit' to exit program, type anything else to run program: ").lower() != 'exit':
         if len(tests) > 0:

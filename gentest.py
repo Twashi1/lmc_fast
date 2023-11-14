@@ -17,7 +17,7 @@ import time
 random.seed(time.time())
 
 MAX_INSTRUCTIONS = 50_000
-TEST_CASES = 1_000
+TEST_CASES = 10_000
 FILENAME = "cases.txt"
 
 def mean(a, b, c):
@@ -28,4 +28,4 @@ with open(FILENAME, "w+") as f:
         a = random.randint(0, 999)
         b = random.randint(0, 999)
         c = random.randint(0, 999)
-        f.write(f"{i};{a};{b};{c};{mean(a, b, c)};{MAX_INSTRUCTIONS}\n")
+        f.write(f"{i};{a},{b},{c};{mean(a, b, c)};{MAX_INSTRUCTIONS}\n")
