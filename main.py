@@ -136,7 +136,6 @@ def compilerAddLabelToRegistry(label : str, value : int, compiler : CompilerStat
 
     Checks for duplicates
     """
-
     # Check label is not already in compiler registry
     if label in compiler.registry.keys():
         raise RuntimeError(f"Label {label} had >1 data locations associated with it")
@@ -153,7 +152,7 @@ def compilerReadDataInstruction(instruction : Instruction, compiler : CompilerSt
     # Add label to compiler registry
     compilerAddLabelToRegistry(instruction.label, dataIndex, compiler)
     # Add initial value to memory
-    compiler.memory[dataIndex] = int(instruction.operand)
+    compiler.memory[dataIndex] = 0 if instruction.operand is None else int(instruction.operand)
 
 def compilerReadInstruction(instruction : Instruction, compiler : CompilerState) -> None:
     """
@@ -186,7 +185,11 @@ def compilerConsolidateLabels(compiler : CompilerState) -> None:
 
             # Label referenced doesn't exist
             if address is None:
-                raise RuntimeError(f"Unrecognised label: '{operand}' in mailbox {i}")
+                # Check if we're specifying an exact line
+                if len(operand) > 1 and operand[0] == "_":
+                    address = int(operand[1::])
+                else:
+                    raise RuntimeError(f"Unrecognised label: '{operand}' in mailbox {i}")
             else:
                 # TODO: is it possible to attach an operand to an instruction which doesn't take one?
                 #   does it raise an error, or does it just add and cause some weird bugs
@@ -438,16 +441,12 @@ def parserReadInstruction(instruction : str, line : int) -> Instruction:
 
     opcode = parserGetOpcode(operation)
 
-    # Ensure operand is a digit
-    if opcode == DAT and not ((operand.isdigit() and len(operand) <= 3) or (operand is None)):
-        raise RuntimeError(f"Data instruction must have 3 or fewer digit integer operand, but got {operand}")
+    # Ensure operand is a integer value, or unspecified for a data instruction
+    if opcode == DAT and not ((operand is None) or (operand.isdigit() and len(operand) <= 3)):
+        raise RuntimeError(f"Data instruction must have 3 or fewer digit integer operand or nothing, but got {operand}")
     # TODO: Ensure operand is valid identifier, if LMC enforces it
     else:
         pass
-
-    # Pretty shitty fix
-    if opcode == DAT and operand is None:
-        operand = 0
 
     return Instruction(label, opcode, operand, line)
 
@@ -502,6 +501,7 @@ def softResetProgram(state : ProgramState) -> None:
     state.inputs = []
     state.outputs = []
 
+    # Jumps back to start of program
     state.programCounter = 0
 
 def runTestMode(tests : list, state : ProgramState) -> None:
@@ -513,6 +513,9 @@ def runTestMode(tests : list, state : ProgramState) -> None:
     doProgressUpdates = len(tests) >= TEST_LARGE_NUMBER
 
     passedTestCounter = 0
+    totalCycles = 0
+    maxCycles = 0
+    maxCyclesInput = []
 
     state.testMode = True
 
@@ -525,6 +528,12 @@ def runTestMode(tests : list, state : ProgramState) -> None:
             print(f"Running test {currentTest.name} with inputs: {currentTest.givenInputs}, expecting {currentTest.expectedOutput}")
 
         cycles = runProgram(state)
+
+        totalCycles += cycles
+
+        if cycles > maxCycles:
+            maxCycles = cycles
+            maxCyclesInput = currentTest.givenInputs
 
         testSucceeded = len(state.outputs) == 1 and state.outputs[0] == tests[testIndex].expectedOutput
         
@@ -551,6 +560,7 @@ def runTestMode(tests : list, state : ProgramState) -> None:
         softResetProgram(state)
 
     print(f"{passedTestCounter}/{len(tests)} passed")
+    print(f"Worst case cycles: {maxCycles} for input {maxCyclesInput}. Average of {int(totalCycles/len(tests))} cycles.")
 
 def runUserMode(state : ProgramState) -> None:
     """
@@ -619,10 +629,12 @@ if __name__ == "__main__":
                 # This line is a warcrime
                 tests.append(Test(name, [int(i) for i in inputs.split(",")], int(output), int(feMax)))
 
-    while input("Type 'exit' to exit program, type anything else to run program: ").lower() != 'exit':
-        if len(tests) > 0:
-            runTestMode(tests, programState)
-        else:
+    if len(tests) > 0:
+        runTestMode(tests, programState)
+    else:
+        runUserMode(programState)
+
+        while input("Type 'exit' to exit, press enter to run program again: ").lower() != 'exit':
             runUserMode(programState)
 
 print("Goodbye")
