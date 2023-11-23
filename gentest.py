@@ -17,8 +17,8 @@ import time
 random.seed(time.time())
 
 MAX_INSTRUCTIONS = 50_000
-TEST_CASES = 10_000
-FILENAME = "cases.txt"
+TEST_CASES = 1_000
+FILENAME = "short.txt"
 
 def mean(a, b, c):
     return (a + b + c) // 3
@@ -26,7 +26,7 @@ def mean(a, b, c):
 def case(name, a, b, c):
     return f"{name};{a},{b},{c};{mean(a, b, c)};{MAX_INSTRUCTIONS}\n"
 
-specials = [(999,999,999), (0,0,0), (1,999,0)]
+specials = [(999,999,999), (0,0,0), (1,999,0), (2, 999, 1), (997, 2, 0), (2, 997, 0)]
 
 # name;a,b,c;out;maxCycles
 

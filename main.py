@@ -1,5 +1,7 @@
 # For checking if files entered exist
 import os
+# For checking how long it takes to run tests
+import time
 
 # Test if the following behaviours are the same in batch process mode as regular user mode:
 # 1. Automatically reset program counter after HLT instruction
@@ -229,7 +231,7 @@ def interpreterSetAccumulator(value : int, opcode : int, state : ProgramState) -
     Set the value of the accumulator in the program state
     """
     if value >= 0:
-        state.accumulator = value
+        state.accumulator = value % 1000
         # Only reset the negative flag if loading a new value, not upon addition/subtraction
         if opcode in (LDA, IN):
             state.negativeFlag = False
@@ -280,7 +282,7 @@ def interpreterExecuteAdd(address : int, state : ProgramState) -> None:
     """
     Perform ADD instruction
     """
-    interpreterSetAccumulator((state.accumulator + state.memory[address]) % 1_000, ADD, state)
+    interpreterSetAccumulator(state.accumulator + state.memory[address], ADD, state)
 
 def interpreterExecuteSubtract(address : int, state : ProgramState) -> None:
     """
@@ -521,6 +523,8 @@ def runTestMode(tests : list, state : ProgramState) -> None:
 
     print(f"About to run {len(tests)} tests")
 
+    start = time.time_ns()
+
     for testIndex, currentTest in enumerate(tests):
         # Reverse given inputs since State::inputs behaves a bit like a stack                
         state.inputs = [currentTest.givenInputs[i] for i in range(len(currentTest.givenInputs) - 1, -1, -1)]
@@ -549,7 +553,7 @@ def runTestMode(tests : list, state : ProgramState) -> None:
             reason = None
 
             if cycles > currentTest.maxCycles:
-                reason = f"Exceeded maximum instructions {currentTest.maxInstructions}"
+                reason = f"Exceeded maximum instructions {currentTest.maxCycles}"
 
             else:
                 output = None if len(state.outputs) < 1 else state.outputs
@@ -559,8 +563,13 @@ def runTestMode(tests : list, state : ProgramState) -> None:
 
         softResetProgram(state)
 
-    print(f"{passedTestCounter}/{len(tests)} passed")
-    print(f"Worst case cycles: {maxCycles} for input {maxCyclesInput}. Average of {int(totalCycles/len(tests))} cycles.")
+    end = time.time_ns()
+    timeElapsedNanoseconds = end - start
+    cyclesPerSecond = totalCycles / (timeElapsedNanoseconds * 1E-6)
+
+    print(f"{passedTestCounter}/{len(tests)} passed in {timeElapsedNanoseconds * 1E-9:.3g}s")
+    print(f"Worst case cycles: {maxCycles} for input {maxCyclesInput}")
+    print(f"Average of {int(totalCycles/len(tests))} cycles, at speed {cyclesPerSecond:.4g} cycles per millisecond")
 
 def runUserMode(state : ProgramState) -> None:
     """
@@ -580,13 +589,13 @@ if __name__ == "__main__":
         sourceFilename = input("Enter source code file: ")
 
     # Expected format for a test is:
-    # name;input;input;input;output;maxCycles
+    # name;input,input,input;output;maxCycles
     # As many inputs as the program asks for, with one single output, and maxCycles
     # being how many F-E cycles should be run before we assume you got stuck in an
     # infinite loop
     # Example (for the mean of 3 numbers):
-    # zero-test:0;1;0;0;50000
-    # big-test:999;333;666;666;50000
+    # zero-test;0,1,0;0;50000
+    # big-test;999,333,666;666;50000
     # ...
     # Multiple tests can be in the same file, just separated by a newline
     testFilename = input("Enter filename for tests to run, or leave blank to run no tests: ")
@@ -636,5 +645,3 @@ if __name__ == "__main__":
 
         while input("Type 'exit' to exit, press enter to run program again: ").lower() != 'exit':
             runUserMode(programState)
-
-print("Goodbye")
